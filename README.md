@@ -10,3 +10,5 @@ https://www.nasm.us/
 nasm code.asm -o boot.img
 
 gwn iets in die richting als hierboven
+
+Draai met virtuele machine ofzo of in het echt met usb stick
