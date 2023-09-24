@@ -1,16 +1,21 @@
 [bits 16]
 [org 0x7c00]
 
+	mov [bootdrive], dl
+
 	xor ax, ax
 	mov es, ax
 	mov ds, ax
-	mov bp, 0x8000
+	mov bp, 0xFE00
 	mov sp, bp
 	cli
 	call cls
 	mov si, welkom
 	call printstring
 	call lijnomlaag
+	mov al, 63
+	mov bx, 0x7e00
+	call leesschijf
 
 main:
 	mov ah, 0Eh
@@ -97,11 +102,56 @@ cls:
 	int 10h
 	ret
 
+nietgevonden:
+	mov si, niet
+	call printstring
+	call lijnomlaag
+	jmp main
+
+leesschijf:
+	mov ah, 02h
+	mov ch, 0
+	mov cl, 2
+	mov dh, 0
+	mov dl, [bootdrive]
+	mov es, [leeg]
+	int 13h
+	ret
+
+return:
+	ret
+
+;variabelen
+
+bootdrive: db 0
+welkom: db "Dit is AydinOS 1.0", 0
+buffer: times 8 db 0
+lijstnaam: db "lijst"
+lijstinhoud: db "Je kan: lijst, cls, editor.", 0
+niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
+clsnaam: db "cls"
+editornaam: db "editor"
+editorinhoud: db "Dit is een tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen. Druk op esc om te sluiten, F1 om op te slaan.", 0
+leeg: db 0
+
+times 510 - ($ - $$) db 0
+dw 0xaa55
+
 editor:
 	call cls
 	mov si, editorinhoud
 	call printstring
+	mov si, 0x8400
+	call printstring
 	call lijnomlaag
+	xor ax, ax
+	int 16h
+	mov al, 6
+	mov bx, 0x8200
+	call leesschijf
+	call cls
+	mov si, 0x8200
+	call printstring
 editorloop:
 	xor ax, ax
 	int 16h
@@ -118,43 +168,23 @@ editorenter:
 editoresc:
 	ret	
 
-nietgevonden:
-	mov si, niet
-	call printstring
-	call lijnomlaag
-	jmp main
-
-return:
-	ret
-
-;variabelen
-
-welkom: db "Dit is AydinOS 1.0", 0
-buffer: times 8 db 0
-lijstnaam: db "lijst"
-lijstinhoud: db "Je kan: lijst, cls, editor.", 0
-niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
-clsnaam: db "cls"
-editornaam: db "editor"
-editorinhoud: db "Dit is een tekstverwerker. Druk op esc om te sluiten, F1 om op te slaan.", 0
-
-times 510 - ($ - $$) db 0
-dw 0xaa55
-
-;2e sector leeg
-
 times 1024 - ($ - $$) db 0
 
-;3e sector buffer voor opslag
+;3e sector leeg
 
 times 1536 - ($ - $$) db 0
 
-;4e sector bestandstabel
-
-db "welkom5"
+;4e sector buffer voor opslag
 
 times 2048 - ($ - $$) db 0
 
-db "Welkom in AydinOS 1.0. Dit bestand heet welkom en is opgeslagen in de 5e sector van de harde schijf. Dit is ook hoe je een bestand moet noemen. De naam + eerstvolgende vrije sector", 0
+;5e sector bestandstabel
+db "welkom6"
 
 times 2560 - ($ - $$) db 0
+
+db "Welkom in AydinOS 1.0. Dit bestand heet welkom en is opgeslagen in de 6e sector van de harde schijf. Dit is ook hoe je een bestand moet noemen. De naam + eerstvolgende vrije sector", 0
+
+times 3072 - ($ - $$) db 0
+
+times 32768 - ($ - $$) db 0
