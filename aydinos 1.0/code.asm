@@ -13,8 +13,6 @@
 	mov si, welkom
 	call printstring
 	call lijnomlaag
-	mov al, 63
-	mov bx, 0x7e00
 	call leesschijf
 
 main:
@@ -110,11 +108,23 @@ nietgevonden:
 
 leesschijf:
 	mov ah, 02h
+	mov al, 63
 	mov ch, 0
 	mov cl, 2
 	mov dh, 0
 	mov dl, [bootdrive]
 	mov es, [leeg]
+	mov bx, 0x7e00
+	int 13h
+	ret
+
+schrijfnaarschijf:
+	mov ah, 03h
+	mov al, 1
+	mov dh, 0
+	mov dl, [bootdrive]
+	mov es, [leeg]
+	mov bx, 0x8200
 	int 13h
 	ret
 
@@ -131,7 +141,8 @@ lijstinhoud: db "Je kan: lijst, cls, editor.", 0
 niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
 clsnaam: db "cls"
 editornaam: db "editor"
-editorinhoud: db "Dit is een tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen. Druk op esc om te sluiten, F1 om op te slaan.", 0
+editorinhoud: db "Tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen.Druk op F1 om op te slaan en esc om te sluiten.", 0
+editorbestandadres: dw 0
 leeg: db 0
 
 times 510 - ($ - $$) db 0
@@ -141,17 +152,22 @@ editor:
 	call cls
 	mov si, editorinhoud
 	call printstring
+	call lijnomlaag
 	mov si, 0x8400
 	call printstring
 	call lijnomlaag
-	xor ax, ax
-	int 16h
-	mov al, 6
-	mov bx, 0x8200
+	call tweenummeriginvoer
+	push ax
 	call leesschijf
 	call cls
-	mov si, 0x8200
+	pop bx
+	mov ax, 0x200
+	mul bx
+	add ax, 0x7a00
+	mov [editorbestandadres], ax
+	mov si, [editorbestandadres]
 	call printstring
+	mov di, 0x8200
 editorloop:
 	xor ax, ax
 	int 16h
@@ -159,14 +175,52 @@ editorloop:
 	je editorenter
 	cmp ax, 011Bh
 	je editoresc
+	cmp ax, 0E08h
+	je editorbackspace
+	cmp ax, 3B00h
+	je editoropslaan
 	mov ah, 0Eh
 	int 10h
+	stosb
 	jmp editorloop
 editorenter:
 	call lijnomlaag
 	jmp editorloop
 editoresc:
-	ret	
+	ret
+editorbackspace:
+	dec si
+	jmp editorloop
+editoropslaan:
+	call tweenummeriginvoer
+	mov cx, ax
+	call schrijfnaarschijf
+	ret
+
+tweenummeriginvoer:
+	xor ax, ax
+	int 16h
+	push ax
+	mov ah, 0Eh
+	int 10h
+	xor ax, ax
+	pop ax
+	sub al, 30h
+	mov bx, ax
+	mov ax, 10
+	mul bx
+	push ax
+	xor ax, ax
+	int 16h
+	push ax
+	mov ah, 0Eh
+	int 10h
+	xor ax, ax
+	pop ax
+	sub al, 30h
+	pop bx
+	add ax, bx
+	ret
 
 times 1024 - ($ - $$) db 0
 
@@ -179,7 +233,7 @@ times 1536 - ($ - $$) db 0
 times 2048 - ($ - $$) db 0
 
 ;5e sector bestandstabel
-db "welkom6"
+db "welkom06"
 
 times 2560 - ($ - $$) db 0
 
