@@ -121,10 +121,10 @@ leesschijf:
 schrijfnaarschijf:
 	mov ah, 03h
 	mov al, 1
+	mov ch, 0
 	mov dh, 0
 	mov dl, [bootdrive]
 	mov es, [leeg]
-	mov bx, 0x8200
 	int 13h
 	ret
 
@@ -141,7 +141,7 @@ lijstinhoud: db "Je kan: lijst, cls, editor.", 0
 niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
 clsnaam: db "cls"
 editornaam: db "editor"
-editorinhoud: db "Tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen.Druk op F1 om op te slaan en esc om te sluiten.", 0
+editorinhoud: db "Tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen.Druk op F1 om op te slaan of esc om te sluiten.", 0
 editorbestandadres: dw 0
 leeg: db 0
 
@@ -168,7 +168,7 @@ editor:
 	mov si, [editorbestandadres]
 	call printstring
 	mov di, 0x8200
-editorloop:
+editorlus:
 	xor ax, ax
 	int 16h
 	cmp ax, 1C0Dh
@@ -182,20 +182,57 @@ editorloop:
 	mov ah, 0Eh
 	int 10h
 	stosb
-	jmp editorloop
+	jmp editorlus
 editorenter:
 	call lijnomlaag
-	jmp editorloop
+	jmp editorlus
 editoresc:
 	ret
 editorbackspace:
-	dec si
-	jmp editorloop
+	dec di
+	mov ah, 0Eh
+	mov al, 08h
+	int 10h
+	jmp editorlus
 editoropslaan:
+	mov si, 0x8400
+	call printstring
+	dec si
+	mov [editorbestandadres], si
+	call cls
+	mov si, opslainstructie1
+	call printstring
 	call tweenummeriginvoer
-	mov cx, ax
+	mov cl, al
+	mov bx, 0x8200
+	call schrijfnaarschijf
+	call leesschijf
+	call lijnomlaag
+	mov si, opslainstructie2
+	call printstring
+	mov di, [editorbestandadres]
+opslalus:
+	xor ax, ax
+	int 16h
+	cmp ax, 1C0Dh
+	je naamopslaan
+	cmp ax, 0E08h
+	je osplabackspace
+	mov ah, 0Eh
+	int 10h
+	stosb
+	jmp opslalus
+naamopslaan:
+	mov cl, 5
+	mov bx, 0x8400
 	call schrijfnaarschijf
 	ret
+osplabackspace:
+	dec di
+	mov ah, 0Eh
+	mov al, 08h
+	int 10h
+	jmp opslalus
 
 tweenummeriginvoer:
 	xor ax, ax
@@ -221,6 +258,9 @@ tweenummeriginvoer:
 	pop bx
 	add ax, bx
 	ret
+
+opslainstructie1: db "Geef de sectornummer bijv. 06", 0
+opslainstructie2: db "Geef de naam en sectornummer bijv. welkom06 en druk op enter", 0
 
 times 1024 - ($ - $$) db 0
 
