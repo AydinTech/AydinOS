@@ -87,6 +87,12 @@ zoekcommando:
 	mov di, editornaam
 	repe cmpsb
 	je editor
+
+	mov cx, 6
+	mov si, buffer
+	mov di, schoonnaam
+	repe cmpsb
+	je schoon
 	jmp nietgevonden
 
 lijst:
@@ -137,18 +143,21 @@ bootdrive: db 0
 welkom: db "Dit is AydinOS 1.0", 0
 buffer: times 8 db 0
 lijstnaam: db "lijst"
-lijstinhoud: db "Je kan: lijst, cls, editor.", 0
+lijstinhoud: db "Je kan: lijst, cls, editor, schoon.", 0
 niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
 clsnaam: db "cls"
 editornaam: db "editor"
-editorinhoud: db "Tekstverwerker. Voer de cijfer na de naam van het bestand in dat je wilt openen.Druk op F1 om op te slaan of esc om te sluiten.", 0
+editorinhoud: db "Tekstverwerker: Voer de cijfer na de naam in dat je wilt openen.Druk op F1 om op te slaan of esc om te sluiten.", 0
 editorbestandadres: dw 0
+tekstoffseteindtekst: dw 0
+tekstoffsetbeginsector: dw 0
 leeg: db 0
 
 times 510 - ($ - $$) db 0
 dw 0xaa55
 
 editor:
+	call leesschijf
 	call cls
 	mov si, editorinhoud
 	call printstring
@@ -165,9 +174,12 @@ editor:
 	mul bx
 	add ax, 0x7a00
 	mov [editorbestandadres], ax
+	mov [tekstoffsetbeginsector], ax
 	mov si, [editorbestandadres]
 	call printstring
-	mov di, 0x8200
+	dec si
+	mov [tekstoffseteindtekst], si
+	mov di, si
 editorlus:
 	xor ax, ax
 	int 16h
@@ -204,7 +216,7 @@ editoropslaan:
 	call printstring
 	call tweenummeriginvoer
 	mov cl, al
-	mov bx, 0x8200
+	mov bx, [tekstoffsetbeginsector]
 	call schrijfnaarschijf
 	call leesschijf
 	call lijnomlaag
@@ -217,7 +229,7 @@ opslalus:
 	cmp ax, 1C0Dh
 	je naamopslaan
 	cmp ax, 0E08h
-	je osplabackspace
+	je opslabackspace
 	mov ah, 0Eh
 	int 10h
 	stosb
@@ -227,12 +239,32 @@ naamopslaan:
 	mov bx, 0x8400
 	call schrijfnaarschijf
 	ret
-osplabackspace:
+opslabackspace:
 	dec di
 	mov ah, 0Eh
 	mov al, 08h
 	int 10h
 	jmp opslalus
+
+schoon:
+	call leesschijf
+	call cls
+	mov si, schooninstructie1
+	call printstring
+	call lijnomlaag
+	call lijnomlaag
+	mov si, 0x8400
+	call printstring
+	xor cx, cx
+	call tweenummeriginvoer
+	mov cl, al
+	mov ax, 0301h
+	xor dh, dh
+	mov dl, [bootdrive]
+	mov es, [leeg]
+	mov bx, 0x8000
+	int 13h
+	ret
 
 tweenummeriginvoer:
 	xor ax, ax
@@ -261,6 +293,8 @@ tweenummeriginvoer:
 
 opslainstructie1: db "Geef de sectornummer bijv. 06", 0
 opslainstructie2: db "Geef de naam en sectornummer bijv. welkom06 en druk op enter", 0
+schoonnaam: db "schoon"
+schooninstructie1: db "Schoonmaker: Voer de cijfer na de naam van het bestand in dat je wilt verwijderen.", 0
 
 times 1024 - ($ - $$) db 0
 
