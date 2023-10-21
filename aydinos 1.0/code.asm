@@ -22,16 +22,20 @@ reservedflags:          db 0
 signature:              db 0x29
 serial_number:          dd 0x2d7e5a1a
 volume_label:           db "BAKSTEEN1  "
-systemidentifier:       db "FAT16", 0, 0, 0
+systemidentifier:       db "FAT12", 0, 0, 0
 
 bootloader:
     xor ax, ax
+    mov bp, 0xffff
+    mov sp, bp
     mov ds, ax
     mov es, ax
     mov ss, ax
     mov [boot_disk], dl
 
     mov ax, 0003h
+    int 10h
+    mov ax, 0E41h
     int 10h
     mov ah, 2h
     mov al, 62
@@ -45,24 +49,23 @@ bootloader:
     cmp ah, 0
     jne error
 
+    mov ax, 0E42h
+    int 10h
+
     cli
-    lgdt [GDT_descriptor]
     in al, 0x92
     or al, 2
     out 0x92, al
+    lgdt [GDT_descriptor]
     mov eax, cr0
     or eax, 1
     mov cr0, eax
-    mov ax, 16
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
     jmp 08h:start_protected_mode
 
 error:
     mov ax, 0E45h
     int 10h
-    jmp error
+    jmp $
 
 GDT_start:
     GDT_null:
@@ -97,12 +100,20 @@ GDT_descriptor:
 [bits 32]
 start_protected_mode:
 
-times 510 - ($ - $$) db 0
-dw 0xaa55
-
+    mov ax, 16
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
     mov ebp, 0xFFFF
     mov esp, ebp
+    mov word [0xb8004], 0x0f43
+    jmp removecursor
 
+times 510 - ($ - $$) db 0
+dw 0xaa55
+removecursor:
     mov al, 0x0A
     mov dx, 0x03D4
     out dx, al
@@ -116,10 +127,10 @@ dw 0xaa55
     out PIC2, al
     call verspiltijd
 
-    mov al, 0
+    mov al, 0x20
     out PIC1 + 1, al
     call verspiltijd
-    mov al, 8
+    mov al, 0x28
     out PIC2 + 1, al
     call verspiltijd
 
@@ -161,9 +172,11 @@ dw 0xaa55
     out ps2command, al
     call reactieps2
 
+    mov word [0xb8006], 0x0f44
+
     mov dword [videopointer], 0xb8000
     mov esi, string
-    int 0
+    int 0x20
     jmp $
 
 ;routines
@@ -243,33 +256,22 @@ noop:
     iret
 
 IDT_start:
-    dw printstring  ;int 0
-    dw 0x08
-    dw 0x8E00
-    dw 0x00
-
-    dw toetsenboord ;int 1
-    dw 0x08
-    dw 0x8E00
-    dw 0x00
-
-    dw noop         ;int 2 - gereserveerd
-    dw 0x08
-    dw 0xE00
-    dw 0x00
-
-%rep 0x0C
-    dw noop         ;int 3 - 14
+%rep 0x20
+    dw noop         ;uitzonderingen fouten int 0 - 1f
     dw 0x08
     dw 0x8E00
     dw 0x00
 %endrep
 
-    dw noop         ;int 15 - gereserveerd
+    dw printstring  ;int 0x20 - irq 0
     dw 0x08
-    dw 0xE00
+    dw 0x8E00
     dw 0x00
 
+    dw toetsenboord ;int 0x21 - irq 1
+    dw 0x08
+    dw 0x8E00
+    dw 0x00
 IDT_end:
 
 IDTR:
