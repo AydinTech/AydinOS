@@ -11,7 +11,7 @@ reservedsectors:        dw 2
 FATs:                   db 2
 rootentries:            dw 512
 totalsectors:           dw 63
-mediadescriptortype:    db 0xf8
+mediadescriptortype:    db 0xf0
 sectorsperFAT:          dw 20
 sectorspertrack:        dw 63
 heads:                  dw 16
@@ -19,12 +19,16 @@ hiddensectors:          dd 0
 largesectors:           dd 0
 boot_disk:              db 0
 reservedflags:          db 0
-signature:              db 0x28
-serial_number:          dd 0
+signature:              db 0x29
+serial_number:          dd 0x2d7e5a1a
 volume_label:           db "BAKSTEEN1  "
 systemidentifier:       db "FAT16", 0, 0, 0
 
 bootloader:
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
     mov [boot_disk], dl
 
     mov ax, 0003h
