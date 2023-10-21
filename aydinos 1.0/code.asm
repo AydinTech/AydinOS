@@ -229,7 +229,7 @@ printloop:
 return:
     mov [videopointer], edi
     popa
-	iret
+    iret
 
 toetsenboord:
     pusha
