@@ -1,318 +1,274 @@
-[bits 16]
 [org 0x7c00]
+[bits 16]
 
-	mov [bootdrive], dl
+    jmp bootloader
+    nop
 
-	xor ax, ax
-	mov es, ax
-	mov ds, ax
-	mov bp, 0xFE00
-	mov sp, bp
-	cli
-	call cls
-	mov si, welkom
-	call printstring
-	call lijnomlaag
-	call leesschijf
+OEM_identifier:         db "MSWIN4.1"
+Bytespersector:         dw 512
+Sectorspercluster:      db 4
+reservedsectors:        dw 2
+FATs:                   db 2
+rootentries:            dw 512
+totalsectors:           dw 63
+mediadescriptortype:    db 0xf8
+sectorsperFAT:          dw 20
+sectorspertrack:        dw 63
+heads:                  dw 16
+hiddensectors:          dd 0
+largesectors:           dd 0
+boot_disk:              db 0
+reservedflags:          db 0
+signature:              db 0x28
+serial_number:          dd 0
+volume_label:           db "BAKSTEEN1  "
+systemidentifier:       db "FAT16", 0, 0, 0
 
-main:
-	mov ah, 0Eh
-	mov al, ">"
-	int 10h
-	call krijginput
-	call lijnomlaag
-	call zoekcommando
-	jmp main
+bootloader:
+    mov [boot_disk], dl
 
-;routines
+    mov ax, 0003h
+    int 10h
+    mov ah, 2h
+    mov al, 62
+    mov ch, 0
+    mov cl, 2
+    mov dh, 0
+    mov bx, 0x7e00
+    int 13h
+    mov ah, 1h
+    int 13h
+    cmp ah, 0
+    jne error
 
-printstring:
-	mov ah, 0Eh
-	lodsb
-	int 10h
-	cmp al, 0
-	je return
-	jmp printstring
+    cli
+    lgdt [GDT_descriptor]
+    mov al, 2
+    out 0x92, al
+    mov eax, cr0
+    or eax, 1
+    mov cr0, eax
+    mov ax, 16
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    jmp 08h:start_protected_mode
 
-lijnomlaag:
-	mov ah, 03h
-	mov bh, 00
-	int 10h
-	mov ah, 02h
-	inc dh
-	xor dl, dl
-	int 10h
-	ret
+error:
+    mov ax, 0E45h
+    int 10h
+    jmp error
 
-krijginput:
-	mov di, buffer
-	xor cx, cx
-inputloop:
-	xor ax, ax
-	int 16h
-	cmp ax, 1C0Dh
-	je return
-	cmp ax, 0E08h
-	je inputverlaagd
-	stosb
-	inc cx
-	cmp cx, 8
-	mov ah, 0Eh
-	int 10h
-	je return
-	jmp inputloop
-inputverlaagd:
-	mov ah, 0Eh
-	mov al, 08h
-	int 10h
-	dec di
-	dec cx
-	jmp inputloop
+GDT_start:
+    GDT_null:
+        dd 0x0
+        dd 0x0
+    GDT_code:
+        dw 0xffff
+        dw 0x0
+        db 0x0
+        db 0b10011010
+        db 0b11001111
+        db 0x0
+    GDT_data:
+        dw 0xffff
+        dw 0x0
+        db 0x0
+        db 0b10010010
+        db 0b11001111
+        db 0x0
+GDT_end:
 
-zoekcommando:
-	mov cx, 5
-	mov si, buffer
-	mov di, lijstnaam
-	repe cmpsb
-	je lijst
+GDT_descriptor:
+    dw GDT_end - GDT_start - 1
+    dd GDT_start
 
-	mov cx, 3
-	mov si, buffer
-	mov di, clsnaam
-	repe cmpsb
-	je cls
+%define PIC1 0x20
+%define PIC2 0xA0
+%define ps2data 0x60
+%define ps2status 0x64
+%define ps2command 0x64
 
-	mov cx, 6
-	mov si, buffer
-	mov di, editornaam
-	repe cmpsb
-	je editor
-
-	mov cx, 6
-	mov si, buffer
-	mov di, schoonnaam
-	repe cmpsb
-	je schoon
-	jmp nietgevonden
-
-lijst:
-	mov si, lijstinhoud
-	call printstring
-	call lijnomlaag
-	ret
-
-cls:
-	mov ax, 0002h
-	int 10h
-	ret
-
-nietgevonden:
-	mov si, niet
-	call printstring
-	call lijnomlaag
-	jmp main
-
-leesschijf:
-	mov ah, 02h
-	mov al, 63
-	mov ch, 0
-	mov cl, 2
-	mov dh, 0
-	mov dl, [bootdrive]
-	mov es, [leeg]
-	mov bx, 0x7e00
-	int 13h
-	ret
-
-schrijfnaarschijf:
-	mov ah, 03h
-	mov al, 1
-	mov ch, 0
-	mov dh, 0
-	mov dl, [bootdrive]
-	mov es, [leeg]
-	int 13h
-	ret
-
-return:
-	ret
-
-;variabelen
-
-bootdrive: db 0
-welkom: db "Dit is AydinOS 1.0", 0
-buffer: times 8 db 0
-lijstnaam: db "lijst"
-lijstinhoud: db "Je kan: lijst, cls, editor, schoon.", 0
-niet: db "Deze bestaat niet. Typ lijst voor commando's.", 0
-clsnaam: db "cls"
-editornaam: db "editor"
-editorinhoud: db "Tekstverwerker: Voer de cijfer na de naam in dat je wilt openen.Druk op F1 om op te slaan of esc om te sluiten.", 0
-editorbestandadres: dw 0
-tekstoffseteindtekst: dw 0
-tekstoffsetbeginsector: dw 0
-leeg: db 0
+[bits 32]
+start_protected_mode:
 
 times 510 - ($ - $$) db 0
 dw 0xaa55
 
-editor:
-	call leesschijf
-	call cls
-	mov si, editorinhoud
-	call printstring
-	call lijnomlaag
-	mov si, 0x8400
-	call printstring
-	call lijnomlaag
-	call tweenummeriginvoer
-	push ax
-	call leesschijf
-	call cls
-	pop bx
-	mov ax, 0x200
-	mul bx
-	add ax, 0x7a00
-	mov [editorbestandadres], ax
-	mov [tekstoffsetbeginsector], ax
-	mov si, [editorbestandadres]
-	call printstring
-	dec si
-	mov [tekstoffseteindtekst], si
-	mov di, si
-editorlus:
-	xor ax, ax
-	int 16h
-	cmp ax, 1C0Dh
-	je editorenter
-	cmp ax, 011Bh
-	je editoresc
-	cmp ax, 0E08h
-	je editorbackspace
-	cmp ax, 3B00h
-	je editoropslaan
-	mov ah, 0Eh
-	int 10h
-	stosb
-	jmp editorlus
-editorenter:
-	call lijnomlaag
-	jmp editorlus
-editoresc:
-	ret
-editorbackspace:
-	dec di
-	mov ah, 0Eh
-	mov al, 08h
-	int 10h
-	jmp editorlus
-editoropslaan:
-	mov si, 0x8400
-	call printstring
-	dec si
-	mov [editorbestandadres], si
-	call cls
-	mov si, opslainstructie1
-	call printstring
-	call tweenummeriginvoer
-	mov cl, al
-	mov bx, [tekstoffsetbeginsector]
-	call schrijfnaarschijf
-	call leesschijf
-	call lijnomlaag
-	mov si, opslainstructie2
-	call printstring
-	mov di, [editorbestandadres]
-opslalus:
-	xor ax, ax
-	int 16h
-	cmp ax, 1C0Dh
-	je naamopslaan
-	cmp ax, 0E08h
-	je opslabackspace
-	mov ah, 0Eh
-	int 10h
-	stosb
-	jmp opslalus
-naamopslaan:
-	mov cl, 5
-	mov bx, 0x8400
-	call schrijfnaarschijf
-	ret
-opslabackspace:
-	dec di
-	mov ah, 0Eh
-	mov al, 08h
-	int 10h
-	jmp opslalus
+    mov ebp, 0xFFFF
+    mov esp, ebp
 
-schoon:
-	call leesschijf
-	call cls
-	mov si, schooninstructie1
-	call printstring
-	call lijnomlaag
-	call lijnomlaag
-	mov si, 0x8400
-	call printstring
-	xor cx, cx
-	call tweenummeriginvoer
-	mov cl, al
-	mov ax, 0301h
-	xor dh, dh
-	mov dl, [bootdrive]
-	mov es, [leeg]
-	mov bx, 0x8000
-	int 13h
-	ret
+    mov al, 0x0A
+    mov dx, 0x03D4
+    out dx, al
+    inc dx
+    mov al, 0x20
+    out dx, al
 
-tweenummeriginvoer:
-	xor ax, ax
-	int 16h
-	push ax
-	mov ah, 0Eh
-	int 10h
-	xor ax, ax
-	pop ax
-	sub al, 30h
-	mov bx, ax
-	mov ax, 10
-	mul bx
-	push ax
-	xor ax, ax
-	int 16h
-	push ax
-	mov ah, 0Eh
-	int 10h
-	xor ax, ax
-	pop ax
-	sub al, 30h
-	pop bx
-	add ax, bx
-	ret
+    mov al, 0x11
+    out PIC1, al
+    call verspiltijd
+    out PIC2, al
+    call verspiltijd
 
-opslainstructie1: db "Geef de sectornummer bijv. 06", 0
-opslainstructie2: db "Geef de naam en sectornummer bijv. welkom06 en druk op enter", 0
-schoonnaam: db "schoon"
-schooninstructie1: db "Schoonmaker: Voer de cijfer na de naam van het bestand in dat je wilt verwijderen.", 0
+    mov al, 0
+    out PIC1 + 1, al
+    call verspiltijd
+    mov al, 8
+    out PIC2 + 1, al
+    call verspiltijd
 
-times 1024 - ($ - $$) db 0
+    mov al, 4
+    out PIC1 + 1, al
+    call verspiltijd
+    mov al, 2
+    out PIC2 + 1, al
+    call verspiltijd
 
-;3e sector leeg
+    mov al, 0x01
+    out PIC1 + 1, al
+    call verspiltijd
+    out PIC2 + 1, al
+    call verspiltijd
 
-times 1536 - ($ - $$) db 0
+    mov al, 0xFD
+    out PIC1 + 1, al
+    call verspiltijd
 
-;4e sector buffer voor opslag
+    lidt [IDTR]
+    sti
 
-times 2048 - ($ - $$) db 0
+    call wachtps2
+    mov al, 0xA7
+    out ps2command, al
 
-;5e sector bestandstabel
-db "welkom06"
+    call wachtps2
+    mov al, 0xAE
+    out ps2command, al
 
-times 2560 - ($ - $$) db 0
+    call wachtps2
+    mov al, 0xF6
+    out ps2command, al
+    call reactieps2
 
-db "Welkom in AydinOS 1.0. Dit bestand heet welkom en is opgeslagen in de 6e sector van de harde schijf. Dit is ook hoe je een bestand moet noemen. De naam + eerstvolgende vrije sector", 0
+    call wachtps2
+    mov al, 0xF4
+    out ps2command, al
+    call reactieps2
 
-times 3072 - ($ - $$) db 0
+    mov dword [videopointer], 0xb8000
+    mov esi, string
+    int 0
+    jmp $
 
-times 32768 - ($ - $$) db 0
+;routines
+
+wachtps2:
+    in al, ps2status
+    shl al, 6
+    shr al, 7
+    cmp al, 1
+    je wachtps2
+    ret
+
+reactieps2:
+    mov ah, al
+    in al, ps2data
+    cmp al, 0xFA
+    jne herstuur
+    ret
+herstuur:
+    mov al, ah
+    out ps2command, al
+    ret
+
+verspiltijd:
+    xor cx, cx
+verspiltijdloop:
+    inc cx
+    cmp cx, 0xffff
+    jne verspiltijdloop
+    ret
+
+;variabelen
+
+string: db "Hallo het werkt!", 0
+videopointer: dd 0x0
+scancodes: db 0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0, 0, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0, 0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 39, '`', 0, '\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, '*', 0, ' '
+
+;interrupts
+
+printstring:           ;print string - esi: string
+    pusha
+    mov edi, [videopointer]
+printloop:
+    lodsb
+    mov ah, 0x0f
+    cmp al, 0
+    je return
+    stosw
+    jmp printloop
+return:
+    mov [videopointer], edi
+    popa
+	iret
+
+toetsenboord:
+    pusha
+    xor ax, ax
+    in al, 60h
+    cmp al, 0x59
+    jnb toetsenboordlos
+    mov esi, scancodes
+    add esi, eax
+    lodsb
+    mov ah, 0x0f
+    mov edi, [videopointer]
+    stosw
+    mov [videopointer], edi
+toetsenboordlos:
+    mov al, 20h
+    out PIC1, al
+    call verspiltijd
+    popa
+    iret
+
+noop:
+    nop
+    iret
+
+IDT_start:
+    dw printstring  ;int 0
+    dw 0x08
+    dw 0x8E00
+    dw 0x00
+
+    dw toetsenboord ;int 1
+    dw 0x08
+    dw 0x8E00
+    dw 0x00
+
+    dw noop         ;int 2 - gereserveerd
+    dw 0x08
+    dw 0xE00
+    dw 0x00
+
+%rep 0x0C
+    dw noop         ;int 3 - 14
+    dw 0x08
+    dw 0x8E00
+    dw 0x00
+%endrep
+
+    dw noop         ;int 15 - gereserveerd
+    dw 0x08
+    dw 0xE00
+    dw 0x00
+
+IDT_end:
+
+IDTR:
+    dw IDT_end - IDT_start - 1
+    dd IDT_start
+
+times 512*63 - ($ - $$) db 0
